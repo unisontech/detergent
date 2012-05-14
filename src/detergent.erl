@@ -12,7 +12,7 @@
 -export([initModel/1, initModel/2,
      initModelFile/1,
      config_file_xsd/0,
-     call/3, call/4, call/5, call/6, call/7,
+     call/3, call/4, call/5, call/6, call/7, call_with_soapheaders/5,
      call_attach/4, call_attach/5, call_attach/6, call_attach/8,
      write_hrl/2, write_hrl/3,
      findHeader/2,
@@ -93,6 +93,17 @@ wsdl_op_action(#operation{action = Action}) -> Action.
 %%% --------------------------------------------------------------------
 call(Wsdl, Operation, ListOfData) ->
     call(Wsdl, Operation, ListOfData, #call_opts{}).
+
+call_with_soapheaders(Wsdl, Operation, SoapHeaders, ListOfData,
+                      #call_opts{prefix=Prefix}=CallOpts) when is_record(Wsdl, wsdl) ->
+    case get_operation(Wsdl#wsdl.operations, Operation) of
+    {ok, Op} ->
+        Msg = mk_msg(Prefix, Operation, ListOfData),
+        call(Wsdl, Operation, Op#operation.port,
+                 Op#operation.service, SoapHeaders, Msg, CallOpts);
+    Else ->
+        Else
+    end.
 
 call(WsdlURL, Operation, ListOfData, #call_opts{prefix=Prefix}=CallOpts)
     when is_list(WsdlURL) ->
@@ -371,28 +382,42 @@ makeImportList([ Xsd | Tail], Acc) ->
 %%% Returns Model
 %%% (TODO: using the same prefix for all XSDS makes no sense)
 %%% --------------------------------------------------------------------
-addSchemas([], AccModel, _Prefix, _Options, _ImportList) ->
+addSchemas(Xsds, AccModel, _Prefix, _Options, _ImportList) ->
+    addSchemas(Xsds, AccModel, _Prefix, _Options, _ImportList, 0).
+addSchemas([], AccModel, _Prefix, _Options, _ImportList, _) ->
   AccModel;
-addSchemas([Xsd| Tail], AccModel, Prefix, Options, ImportList) ->
+addSchemas([Xsd| Tail], AccModel, Prefix, Options, ImportList, Num) ->
   Model2 = case Xsd of
              undefined ->
                AccModel;
              _ ->
                {ok, Model} =
                  erlsom_compile:compile_parsed_xsd(Xsd,
-                                                   [{prefix, Prefix},
+                                                   [{prefix, Prefix++integer_to_list(Num)},
                                                     {include_files, ImportList} |Options]),
                case AccModel of
                  undefined -> Model;
                  _ -> erlsom:add_model(AccModel, Model)
                end
            end,
-  addSchemas(Tail, Model2, Prefix, Options, ImportList).
+  addSchemas(Tail, Model2, Prefix, Options, ImportList, Num+1).
 
 %%% --------------------------------------------------------------------
 %%% Get a file from an URL spec.
 %%% --------------------------------------------------------------------
 get_url_file("http://"++_ = URL) ->
+    get_url(URL);
+get_url_file("htts://"++_ = URL) ->
+    get_url(URL);
+get_url_file("file://"++Fname) ->
+    {ok, Bin} = file:read_file(Fname),
+    {ok, binary_to_list(Bin)};
+%% added this, since this is what is used in many WSDLs (i.e.: just a filename).
+get_url_file(Fname) ->
+    {ok, Bin} = file:read_file(Fname),
+    {ok, binary_to_list(Bin)}.
+
+get_url(URL) ->
     case httpc:request(URL) of
     {ok,{{_HTTP,200,_OK}, _Headers, Body}} ->
         {ok, Body};
@@ -402,15 +427,7 @@ get_url_file("http://"++_ = URL) ->
     {error, Reason} ->
         error_logger:error_msg("~p: http-request failed: ~p~n", [?MODULE, Reason]),
         {error, "failed to retrieve: "++URL}
-    end;
-get_url_file("file://"++Fname) ->
-    {ok, Bin} = file:read_file(Fname),
-    {ok, binary_to_list(Bin)};
-%% added this, since this is what is used in many WSDLs (i.e.: just a filename).
-get_url_file(Fname) ->
-    {ok, Bin} = file:read_file(Fname),
-    {ok, binary_to_list(Bin)}.
-
+    end.
 
 %%% --------------------------------------------------------------------
 %%% Make a HTTP Request
