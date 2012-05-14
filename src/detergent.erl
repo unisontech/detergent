@@ -29,7 +29,6 @@
 %%% For testing...
 -export([qtest/0]).
 
-
 -include_lib("detergent.hrl").
 
 -define(HTTP_REQ_TIMEOUT, 20000).
@@ -407,7 +406,7 @@ addSchemas([Xsd| Tail], AccModel, Prefix, Options, ImportList, Num) ->
 %%% --------------------------------------------------------------------
 get_url_file("http://"++_ = URL) ->
     get_url(URL);
-get_url_file("htts://"++_ = URL) ->
+get_url_file("https://"++_ = URL) ->
     get_url(URL);
 get_url_file("file://"++Fname) ->
     {ok, Bin} = file:read_file(Fname),
@@ -693,3 +692,4 @@ config_file_xsd() ->
 "    <xs:attribute name=\"location\" type=\"string\"/>"
 "  </xs:complexType>"
 "</xs:schema>".
+
