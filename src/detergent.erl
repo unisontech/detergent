@@ -12,7 +12,7 @@
 -export([initModel/1, initModel/2,
      initModelFile/1,
      config_file_xsd/0,
-     call/3, call/4, call/5, call/6, call/7, call_with_soapheaders/5,
+     call/3, call/4, call/5, call/6, call/7,
      call_attach/4, call_attach/5, call_attach/6, call_attach/8,
      write_hrl/2, write_hrl/3,
      findHeader/2,
@@ -93,17 +93,6 @@ wsdl_op_action(#operation{action = Action}) -> Action.
 call(Wsdl, Operation, ListOfData) ->
     call(Wsdl, Operation, ListOfData, #call_opts{}).
 
-call_with_soapheaders(Wsdl, Operation, SoapHeaders, ListOfData,
-                      #call_opts{prefix=Prefix}=CallOpts) when is_record(Wsdl, wsdl) ->
-    case get_operation(Wsdl#wsdl.operations, Operation) of
-    {ok, Op} ->
-        Msg = mk_msg(Prefix, Operation, ListOfData),
-        call(Wsdl, Operation, Op#operation.port,
-                 Op#operation.service, SoapHeaders, Msg, CallOpts);
-    Else ->
-        Else
-    end.
-
 call(WsdlURL, Operation, ListOfData, #call_opts{prefix=Prefix}=CallOpts)
     when is_list(WsdlURL) ->
     Wsdl = initModel(WsdlURL, Prefix),
@@ -129,6 +118,16 @@ call(WsdlURL, Operation, Header, Msg, #call_opts{prefix=Prefix}=CallOpts)
     when is_list(WsdlURL) ->
     Wsdl = initModel(WsdlURL, Prefix),
     call(Wsdl, Operation, Header, Msg, CallOpts);
+call(Wsdl, Operation, Header, ListOfData,
+     #call_opts{prefix=Prefix}=CallOpts) when is_record(Wsdl, wsdl) ->
+    case get_operation(Wsdl#wsdl.operations, Operation) of
+    {ok, Op} ->
+        Msg = mk_msg(Prefix, Operation, ListOfData),
+        call(Wsdl, Operation, Op#operation.port, Op#operation.service,
+         Header, Msg, CallOpts);
+    Else ->
+        Else
+    end;
 call(Wsdl, Operation, Header, Msg, CallOpts) when is_record(Wsdl, wsdl) ->
     case get_operation(Wsdl#wsdl.operations, Operation) of
     {ok, Op} ->
