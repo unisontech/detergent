@@ -31,7 +31,7 @@
 
 -include_lib("detergent.hrl").
 
--define(HTTP_REQ_TIMEOUT, 20000).
+-define(HTTP_REQ_TIMEOUT, 60000).
 
 %%-define(dbg(X,Y),
 %%        error_logger:info_msg("*dbg ~p(~p): " X,
@@ -196,8 +196,8 @@ call_attach(Wsdl, Operation, Header, Msg, Attachments, CallOpts)
     case get_operation(Wsdl#wsdl.operations, Operation) of
     {ok, Op} ->
         call_attach(Wsdl, Operation, Op#operation.port,
-                        Op#operation.service,
-         Header, Msg, Attachments, CallOpts);
+                    Op#operation.service, Header, Msg,
+                    Attachments, CallOpts);
     Else ->
         Else
     end.
@@ -432,13 +432,18 @@ get_url(URL) ->
 %%% Make a HTTP Request
 %%% --------------------------------------------------------------------
 http_request(URL, SoapAction, Request, Options, Headers, ContentType) ->
-    case code:ensure_loaded(ibrowse) of
-    {module, ibrowse} ->
-        %% If ibrowse exist in the path then let's use it...
-        ibrowse_request(URL, SoapAction, Request, Options, Headers, ContentType);
-    _ ->
-        %% ...otherwise, let's use the OTP http client.
-        inets_request(URL, SoapAction, Request, Options, Headers, ContentType)
+    case code:ensure_loaded(lhttpc) of
+        {module, lhttpc} ->
+            lhttpc_request(URL, SoapAction, Request, Options, Headers, ContentType);
+        _ ->
+            case code:ensure_loaded(ibrowse) of
+                {module, ibrowse} ->
+                    %% If ibrowse exist in the path then let's use it...
+                    ibrowse_request(URL, SoapAction, Request, Options, Headers, ContentType);
+                _ ->
+                    %% ...otherwise, let's use the OTP http client.
+                    inets_request(URL, SoapAction, Request, Options, Headers, ContentType)
+            end
     end.
 
 inets_request(URL, SoapAction, Request, Options, Headers, ContentType) ->
@@ -481,6 +486,29 @@ ibrowse_request(URL, SoapAction, Request, Options, Headers, ContentType) ->
             end;
         error ->
             {error, "could not start ibrowse"}
+    end.
+
+lhttpc_request(URL, SoapAction, Request, Options, Headers, ContentType) ->
+    {NewHeaders, NewReq} = case Gzip = proplists:get_bool(gzip, Options) of
+                               true ->
+                                   {[{"Content-Encoding", "gzip"},
+                                     {"Accept-Encoding", "gzip"},
+                                     {"User-Agent", "detergent, gzip"}],
+                                    zlib:gzip(Request)};
+                               false ->
+                                   {[], Request}
+                           end,
+    FinalHeaders = [{"Content-Type", ContentType},
+                    {"SOAPAction", SoapAction} | NewHeaders ++ Headers],
+    case lhttpc:request(URL, post, FinalHeaders, NewReq, ?HTTP_REQ_TIMEOUT) of
+        {ok, {{Code, _Status}, ResponseHeaders, ResponseBody}} ->
+            NewRespBody = case Gzip of
+                              true -> zlib:gunzip(ResponseBody);
+                              false -> ResponseBody
+                          end,
+            {ok, Code, ResponseHeaders, NewRespBody};
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 start_ibrowse() ->
