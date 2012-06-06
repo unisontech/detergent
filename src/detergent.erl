@@ -9,7 +9,7 @@
 
 -module(detergent).
 
--export([initModel/1, initModel/2,
+-export([initModel/1, initModel/2, initModel/3,
      initModelFile/1,
      config_file_xsd/0,
      call/3, call/4, call/5, call/6, call/7,
@@ -294,8 +294,11 @@ initModel(WsdlFile) ->
     initModel(WsdlFile, ?DEFAULT_PREFIX).
 
 initModel(WsdlFile, Prefix) ->
+    initModel(WsdlFile, Prefix, []).
+
+initModel(WsdlFile, Prefix, Options) ->
     PrivDir = priv_dir(),
-    initModel2(WsdlFile, Prefix, PrivDir, undefined, undefined).
+    initModel2(WsdlFile, Prefix, PrivDir, undefined, undefined, Options).
 
 initModelFile(ConfigFile) ->
     {ok, ConfigSchema} = erlsom:compile_xsd(config_file_xsd()),
@@ -305,7 +308,7 @@ initModelFile(ConfigFile) ->
               wsdl_file = Wsdl,
               add_files = AddFiles} = Config,
     #xsd_file{name = WsdlFile, prefix = Prefix, import_specs = Import} = Wsdl,
-    initModel2(WsdlFile, Prefix, XsdPath, Import, AddFiles).
+    initModel2(WsdlFile, Prefix, XsdPath, Import, AddFiles, []).
 
 priv_dir() ->
     case code:priv_dir(detergent) of
@@ -315,7 +318,7 @@ priv_dir() ->
             A
     end.
 
-initModel2(WsdlFile, Prefix, Path, Import, AddFiles) ->
+initModel2(WsdlFile, Prefix, Path, Import, AddFiles, AdditionalOptions) ->
     WsdlName = filename:join([Path, "wsdl.xsd"]),
     IncludeWsdl = {"http://schemas.xmlsoap.org/wsdl/", "wsdl", WsdlName},
     {ok, WsdlModel} = erlsom:compile_xsd_file(filename:join([Path, "soap.xsd"]),
@@ -324,7 +327,7 @@ initModel2(WsdlFile, Prefix, Path, Import, AddFiles) ->
     %% add the xsd model (since xsd is also used in the wsdl)
     WsdlModel2 = erlsom:add_xsd_model(WsdlModel),
     IncludeDir = filename:dirname(WsdlFile),
-    Options = [{dir_list, [IncludeDir]} | makeOptions(Import)],
+    Options = [{dir_list, [IncludeDir]} | makeOptions(Import)] ++ AdditionalOptions,
     %% parse Wsdl
     {Model, Operations} = parseWsdls([WsdlFile], Prefix, WsdlModel2, Options, {undefined, []}),
     %% TODO: add files as required
