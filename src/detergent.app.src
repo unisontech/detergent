@@ -1,4 +1,4 @@
 {application, detergent,
  [{descriptiono, "An emulsifying Erlang SOAP library"},
-  {applications, [kernel, stdlib, erlsom, lhttpc]},
+  {applications, [kernel, stdlib, erlsom]},
   {vsn, "0.2"}]}.
